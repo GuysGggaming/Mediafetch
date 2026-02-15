@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, ExternalLink, Image as ImageIcon, PlayCircle, Loader2 } from "lucide-react";
+import { Download, Image as ImageIcon, PlayCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 
 interface DownloadCardProps {
@@ -17,60 +17,31 @@ interface DownloadCardProps {
 export default function DownloadCard({ data }: DownloadCardProps) {
     const [downloading, setDownloading] = useState(false);
 
-    const handleDownload = async () => {
+    const getDownloadProxyUrl = (): string => {
+        if (!data.videoUrl) return "";
+        const platform = data.platform?.toLowerCase() || "media";
+        const timestamp = new Date().getTime();
+        const ext = data.type === "image" ? "jpg" : "mp4";
+        const filename = `${platform}_${timestamp}.${ext}`;
+        return `/api/download-file?url=${encodeURIComponent(data.videoUrl)}&filename=${encodeURIComponent(filename)}`;
+    };
+
+    const handleDownload = () => {
         if (!data.videoUrl) return;
 
+        const proxyUrl = getDownloadProxyUrl();
+        if (!proxyUrl) return;
+
         setDownloading(true);
-        try {
-            // Fetch the file from the URL
-            const response = await fetch(data.videoUrl);
-            
-            if (!response.ok) {
-                throw new Error("Failed to download file");
-            }
 
-            // Get the file as a blob
-            const blob = await response.blob();
-            
-            // Determine file extension based on content type or default to mp4
-            const contentType = response.headers.get("content-type");
-            let extension = "mp4";
-            if (contentType?.includes("video/mp4")) {
-                extension = "mp4";
-            } else if (contentType?.includes("video/webm")) {
-                extension = "webm";
-            } else if (contentType?.includes("image/jpeg")) {
-                extension = "jpg";
-            } else if (contentType?.includes("image/png")) {
-                extension = "png";
-            } else if (contentType?.includes("image/gif")) {
-                extension = "gif";
-            }
-
-            // Create a temporary URL for the blob
-            const blobUrl = window.URL.createObjectURL(blob);
-            
-            // Create a temporary anchor element and trigger download
-            const link = document.createElement("a");
-            link.href = blobUrl;
-            
-            // Generate filename
-            const platform = data.platform?.toLowerCase() || "media";
-            const timestamp = new Date().getTime();
-            const filename = `${platform}_${timestamp}.${extension}`;
-            
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            
-            // Clean up
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
-        } catch (error) {
-            console.error("Download error:", error);
-            // Fallback: open in new tab if download fails
-            window.open(data.videoUrl, "_blank");
-        } finally {
+        // Use proxy URL so server sends Content-Disposition: attachment.
+        // This makes iOS/Android trigger "Save" instead of opening/playing the video.
+        const newTab = window.open(proxyUrl, "_blank");
+        if (!newTab) {
+            // Popup blocked (common on mobile): navigate in same tab so download still starts.
+            window.location.href = proxyUrl;
+            setTimeout(() => setDownloading(false), 2000);
+        } else {
             setDownloading(false);
         }
     };
@@ -134,6 +105,9 @@ export default function DownloadCard({ data }: DownloadCardProps) {
                         </button>
                         <p className="text-xs text-center sm:text-left text-gray-500">
                             *By downloading you agree to our terms of service.
+                        </p>
+                        <p className="text-xs text-center sm:text-left text-gray-400">
+                            Di HP: jika belum terunduh, ketuk tombol Download lagi atau cek folder Unduhan.
                         </p>
                     </div>
                 </div>
